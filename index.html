@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JahitStok - Manajemen Bahan & Keuangan Jahit</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="logo"><i class="fas fa-thread"></i><span>JahitStok</span></div>
+        <nav class="nav-menu">
+            <a href="#" class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+            <a href="#" data-page="barang"><i class="fas fa-boxes"></i> Data Barang</a>
+            <a href="#" data-page="masuk"><i class="fas fa-arrow-down"></i> Barang Masuk</a>
+            <a href="#" data-page="keluar"><i class="fas fa-arrow-up"></i> Barang Keluar</a>
+            <a href="#" data-page="keuangan"><i class="fas fa-wallet"></i> Keuangan</a>
+            <a href="#" data-page="riwayat"><i class="fas fa-history"></i> Riwayat</a>
+        </nav>
+        <div class="user-info"><i class="fas fa-user-circle"></i><span>Admin Jahit</span></div>
+    </aside>
+
+    <main class="main-content">
+        <header class="header">
+            <button class="hamburger" id="hamburger"><i class="fas fa-bars"></i></button>
+            <h1 id="page-title">Dashboard</h1>
+            <div class="header-actions">
+                <span class="date-display" id="dateDisplay"></span>
+                <button class="btn-notif"><i class="fas fa-bell"></i></button>
+            </div>
+        </header>
+
+        <section class="content" id="contentArea">
+
+            <!-- DASHBOARD -->
+            <div id="page-dashboard" class="page active">
+                <div class="stats-grid">
+                    <div class="stat-card" style="--accent: #4f46e5">
+                        <div class="stat-icon"><i class="fas fa-cubes"></i></div>
+                        <div><h3>Total Barang</h3><p class="stat-number" id="totalBarang">0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #10b981">
+                        <div class="stat-icon"><i class="fas fa-arrow-down"></i></div>
+                        <div><h3>Masuk (Bulan Ini)</h3><p class="stat-number" id="totalMasuk">0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #f59e0b">
+                        <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+                        <div><h3>Keluar (Bulan Ini)</h3><p class="stat-number" id="totalKeluar">0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #ef4444">
+                        <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div><h3>Stok Menipis</h3><p class="stat-number" id="totalMenipis">0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #8b5cf6">
+                        <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                        <div><h3>Total Nilai Aset</h3><p class="stat-number" id="totalNilaiAset">Rp 0</p></div>
+                    </div>
+                </div>
+
+                <div class="stats-grid" style="margin-top: 20px;">
+                    <div class="stat-card" style="--accent: #10b981">
+                        <div class="stat-icon"><i class="fas fa-arrow-trend-up"></i></div>
+                        <div><h3>Pemasukan Bulan Ini</h3><p class="stat-number" id="dashPemasukan">Rp 0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #ef4444">
+                        <div class="stat-icon"><i class="fas fa-arrow-trend-down"></i></div>
+                        <div><h3>Pengeluaran Bulan Ini</h3><p class="stat-number" id="dashPengeluaran">Rp 0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #8b5cf6">
+                        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+                        <div><h3>Saldo Total</h3><p class="stat-number" id="dashSaldo">Rp 0</p></div>
+                    </div>
+                </div>
+
+                <div class="chart-placeholder">
+                    <h3><i class="fas fa-chart-bar"></i> Stok Terendah</h3>
+                    <div id="lowStockList" class="low-stock-list"></div>
+                </div>
+            </div>
+
+            <!-- DATA BARANG -->
+            <div id="page-barang" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-boxes"></i> Data Bahan Jahit</h2>
+                    <button class="btn-primary" id="btnTambahBarang"><i class="fas fa-plus"></i> Tambah Barang</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Nama Bahan</th>
+                                <th>Kategori</th>
+                                <th>Warna</th>
+                                <th>Ukuran</th>
+                                <th>Stok</th>
+                                <th>Satuan</th>
+                                <th>Harga Satuan</th>
+                                <th>Total Nilai</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyBarang"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- BARANG MASUK -->
+            <div id="page-masuk" class="page">
+                <div class="page-header"><h2><i class="fas fa-arrow-down"></i> Catat Barang Masuk</h2></div>
+                <div class="form-card">
+                    <form id="formMasuk">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Barang <span class="required">*</span></label>
+                                <select id="masukBarang" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Jumlah <span class="required">*</span></label>
+                                <input type="number" id="masukJumlah" placeholder="0" min="1" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Tanggal</label>
+                                <input type="date" id="masukTanggal" />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Supplier</label>
+                                <input type="text" id="masukSupplier" placeholder="Nama supplier" />
+                            </div>
+                            <div class="form-group">
+                                <label>Keterangan</label>
+                                <input type="text" id="masukKeterangan" placeholder="Catatan tambahan" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Simpan Masuk</button>
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <h3>Riwayat Masuk Terakhir</h3>
+                    <table class="table"><thead><tr><th>#</th><th>Barang</th><th>Jumlah</th><th>Supplier</th><th>Tanggal</th></tr></thead>
+                        <tbody id="tbodyMasuk"></tbody></table>
+                </div>
+            </div>
+
+            <!-- BARANG KELUAR -->
+            <div id="page-keluar" class="page">
+                <div class="page-header"><h2><i class="fas fa-arrow-up"></i> Catat Barang Keluar</h2></div>
+                <div class="form-card">
+                    <form id="formKeluar">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Barang <span class="required">*</span></label>
+                                <select id="keluarBarang" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Jumlah <span class="required">*</span></label>
+                                <input type="number" id="keluarJumlah" placeholder="0" min="1" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Tanggal</label>
+                                <input type="date" id="keluarTanggal" />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Untuk Keperluan</label>
+                                <input type="text" id="keluarTujuan" placeholder="Produksi / Penjualan" />
+                            </div>
+                            <div class="form-group">
+                                <label>Keterangan</label>
+                                <input type="text" id="keluarKeterangan" placeholder="Catatan tambahan" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Simpan Keluar</button>
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <h3>Riwayat Keluar Terakhir</h3>
+                    <table class="table"><thead><tr><th>#</th><th>Barang</th><th>Jumlah</th><th>Tujuan</th><th>Tanggal</th></tr></thead>
+                        <tbody id="tbodyKeluar"></tbody></table>
+                </div>
+            </div>
+
+            <!-- KEUANGAN -->
+            <div id="page-keuangan" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-wallet"></i> Manajemen Keuangan</h2>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card" style="--accent: #10b981">
+                        <div class="stat-icon"><i class="fas fa-arrow-trend-up"></i></div>
+                        <div><h3>Total Pemasukan</h3><p class="stat-number" id="keuTotalMasuk">Rp 0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #ef4444">
+                        <div class="stat-icon"><i class="fas fa-arrow-trend-down"></i></div>
+                        <div><h3>Total Pengeluaran</h3><p class="stat-number" id="keuTotalKeluar">Rp 0</p></div>
+                    </div>
+                    <div class="stat-card" style="--accent: #8b5cf6">
+                        <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+                        <div><h3>Saldo Saat Ini</h3><p class="stat-number" id="keuSaldo">Rp 0</p></div>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <h3 style="margin-bottom: 16px; color: #0f172a;"><i class="fas fa-plus-circle"></i> Catat Transaksi Keuangan</h3>
+                    <form id="formKeuangan">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Jenis Transaksi <span class="required">*</span></label>
+                                <select id="keuJenis" required>
+                                    <option value="pemasukan">💰 Pemasukan</option>
+                                    <option value="pengeluaran">💸 Pengeluaran</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Kategori <span class="required">*</span></label>
+                                <select id="keuKategori" required>
+                                    <option value="Penjualan Jasa">Penjualan Jasa Jahit</option>
+                                    <option value="Penjualan Produk">Penjualan Produk</option>
+                                    <option value="Pembelian Bahan">Pembelian Bahan</option>
+                                    <option value="Gaji Karyawan">Gaji Karyawan</option>
+                                    <option value="Operasional">Operasional</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Jumlah (Rp) <span class="required">*</span></label>
+                                <input type="number" id="keuJumlah" placeholder="0" min="0" required />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tanggal <span class="required">*</span></label>
+                                <input type="date" id="keuTanggal" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Keterangan</label>
+                                <input type="text" id="keuKeterangan" placeholder="Catatan tambahan" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Simpan Transaksi</button>
+                    </form>
+                </div>
+
+                <div class="table-wrapper">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                        <h3 style="margin: 0;"><i class="fas fa-list"></i> Riwayat Keuangan</h3>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn-secondary" id="btnFilterKeuAll" style="padding: 6px 14px; font-size: 13px;">Semua</button>
+                            <button class="btn-secondary" id="btnFilterKeuMasuk" style="padding: 6px 14px; font-size: 13px;">Pemasukan</button>
+                            <button class="btn-secondary" id="btnFilterKeuKeluar" style="padding: 6px 14px; font-size: 13px;">Pengeluaran</button>
+                            <button class="btn-secondary" id="btnHapusKeu" style="padding: 6px 14px; font-size: 13px; background: #fee2e2; color: #dc2626;">Hapus Semua</button>
+                        </div>
+                    </div>
+                    <table class="table">
+                        <thead>
+                            <tr><th>#</th><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Jumlah</th><th>Keterangan</th><th>Aksi</th></tr>
+                        </thead>
+                        <tbody id="tbodyKeuangan"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- RIWAYAT -->
+            <div id="page-riwayat" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-history"></i> Semua Riwayat Transaksi</h2>
+                    <button class="btn-secondary" id="btnResetRiwayat"><i class="fas fa-trash"></i> Hapus Semua Riwayat</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="table"><thead><tr><th>#</th><th>Tanggal</th><th>Barang</th><th>Jenis</th><th>Jumlah</th><th>Keterangan</th></tr></thead>
+                        <tbody id="tbodyRiwayat"></tbody></table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL TAMBAH BARANG -->
+    <div class="modal-overlay" id="modalBarang">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> Tambah Bahan Baru</h3>
+                <button class="modal-close" id="modalClose"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="formTambahBarang">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nama Bahan <span class="required">*</span></label>
+                        <input type="text" id="fbNama" placeholder="Contoh: Benang Katun" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Kategori <span class="required">*</span></label>
+                        <select id="fbKategori" required>
+                            <option value="Benang">Benang</option>
+                            <option value="Jarum">Jarum</option>
+                            <option value="Kain">Kain</option>
+                            <option value="Aksesoris">Aksesoris</option>
+                            <option value="Lainnya">Lainnya</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Warna</label>
+                        <input type="text" id="fbWarna" placeholder="Misal: Merah, Navy" />
+                    </div>
+                    <div class="form-group">
+                        <label>Ukuran</label>
+                        <input type="text" id="fbUkuran" placeholder="Misal: No. 40" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Stok Awal</label>
+                        <input type="number" id="fbStok" placeholder="0" min="0" value="0" />
+                    </div>
+                    <div class="form-group">
+                        <label>Satuan <span class="required">*</span></label>
+                        <select id="fbSatuan" required>
+                            <option value="cone">Cone</option>
+                            <option value="roll">Roll</option>
+                            <option value="pcs">Pcs</option>
+                            <option value="meter">Meter</option>
+                            <option value="yard">Yard</option>
+                            <option value="pack">Pack</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Harga Satuan (Rp)</label>
+                        <input type="number" id="fbHarga" placeholder="0" min="0" value="0" />
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Simpan Barang</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
