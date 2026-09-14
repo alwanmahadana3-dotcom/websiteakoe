@@ -1,50 +1,225 @@
-// ==================== DATA AWAL ====================
-const defaultBarang = [
-    { id: 1, nama: 'Benang Katun', kategori: 'Benang', warna: 'Putih', ukuran: 'No. 40', stok: 25, satuan: 'cone', harga: 8000 },
-    { id: 2, nama: 'Benang Katun', kategori: 'Benang', warna: 'Hitam', ukuran: 'No. 40', stok: 18, satuan: 'cone', harga: 8000 },
-    { id: 3, nama: 'Benang Nilon', kategori: 'Benang', warna: 'Bening', ukuran: 'No. 30', stok: 12, satuan: 'roll', harga: 12000 },
-    { id: 4, nama: 'Jarum Mesin', kategori: 'Jarum', warna: '-', ukuran: 'No. 14', stok: 50, satuan: 'pcs', harga: 2000 },
-    { id: 5, nama: 'Jarum Tangan', kategori: 'Jarum', warna: '-', ukuran: 'No. 9', stok: 30, satuan: 'pcs', harga: 1000 },
-    { id: 6, nama: 'Kain Katun', kategori: 'Kain', warna: 'Merah', ukuran: 'Lebar 110cm', stok: 45, satuan: 'meter', harga: 35000 },
-    { id: 7, nama: 'Kain Katun', kategori: 'Kain', warna: 'Biru Navy', ukuran: 'Lebar 110cm', stok: 32, satuan: 'meter', harga: 35000 },
-    { id: 8, nama: 'Resleting', kategori: 'Aksesoris', warna: 'Hitam', ukuran: '60cm', stok: 40, satuan: 'pcs', harga: 3000 },
-    { id: 9, nama: 'Kancing', kategori: 'Aksesoris', warna: 'Putih', ukuran: '12mm', stok: 100, satuan: 'pcs', harga: 500 },
-    { id: 10, nama: 'Pita Satin', kategori: 'Aksesoris', warna: 'Merah', ukuran: '1/4 inch', stok: 8, satuan: 'meter', harga: 5000 }
-];
+// ==================== FIREBASE CONFIG ====================
+const firebaseConfig = {
+    apiKey: "AIzaSyCb76gCKYb0uemAcCPYeTKQIaCMi2NQk8k",
+    authDomain: "jahitstok.firebaseapp.com",
+    projectId: "jahitstok",
+    storageBucket: "jahitstok.firebasestorage.app",
+    messagingSenderId: "129175331237",
+    appId: "1:129175331237:web:a7cc5616b23f52ed06884c"
+};
 
+const GOOGLE_CLIENT_ID = "129175331237-d39nldiu6l0kt642rcdsn0jmgvol0l3j.apps.googleusercontent.com";
+
+// Inisialisasi Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ==================== STATE ====================
+let currentUser = null;
 let daftarBarang = [];
 let riwayat = [];
-let keuangan = [];
-let idCounter = 11;
-let keuIdCounter = 1;
-let filterKeu = 'all';
+let currentFilter = 'all';
+let customDari = '';
+let customSampai = '';
+let listenersAttached = false;
 
 // ==================== INIT ====================
 function init() {
-    const savedBarang = localStorage.getItem('jahitStok_barang');
-    const savedRiwayat = localStorage.getItem('jahitStok_riwayat');
-    const savedId = localStorage.getItem('jahitStok_idCounter');
-    const savedKeuangan = localStorage.getItem('jahitStok_keuangan');
-    const savedKeuId = localStorage.getItem('jahitStok_keuIdCounter');
+    setupGoogleSignIn();
 
-    daftarBarang = savedBarang ? JSON.parse(savedBarang) : JSON.parse(JSON.stringify(defaultBarang));
-    if (!savedBarang) localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
+    // Cek status login
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            currentUser = user;
+            await onLoginSuccess(user);
+        } else {
+            showLoginPage();
+        }
+    });
+}
 
-    riwayat = savedRiwayat ? JSON.parse(savedRiwayat) : [];
-    if (!savedRiwayat) localStorage.setItem('jahitStok_riwayat', JSON.stringify(riwayat));
+// ==================== GOOGLE SIGN-IN ====================
+function setupGoogleSignIn() {
+    if (typeof google === 'undefined') {
+        // Tunggu google object tersedia
+        setTimeout(setupGoogleSignIn, 300);
+        return;
+    }
 
-    idCounter = savedId ? parseInt(savedId) : (daftarBarang.length > 0 ? Math.max(...daftarBarang.map(b => b.id)) + 1 : 1);
-    if (!savedId) localStorage.setItem('jahitStok_idCounter', String(idCounter));
+    google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true
+    });
 
-    keuangan = savedKeuangan ? JSON.parse(savedKeuangan) : [];
-    if (!savedKeuangan) localStorage.setItem('jahitStok_keuangan', JSON.stringify(keuangan));
+    const buttonDiv = document.getElementById("buttonDiv");
+    if (buttonDiv) {
+        google.accounts.id.renderButton(buttonDiv, {
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+            shape: "rectangular",
+            width: 280,
+            logo_alignment: "left"
+        });
+    }
+}
 
-    keuIdCounter = savedKeuId ? parseInt(savedKeuId) : 1;
-    if (!savedKeuId) localStorage.setItem('jahitStok_keuIdCounter', String(keuIdCounter));
+function handleCredentialResponse(response) {
+    const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
 
-    renderAll();
-    setupEventListeners();
+    auth.signInWithCredential(credential)
+        .then(async (result) => {
+            currentUser = result.user;
+            await db.collection('users').doc(currentUser.uid).set({
+                nama: currentUser.displayName || '',
+                email: currentUser.email || '',
+                foto: currentUser.photoURL || '',
+                lastLogin: new Date().toISOString()
+            }, { merge: true });
+        })
+        .catch((error) => {
+            console.error('Login error:', error);
+            alert('Gagal login: ' + error.message);
+        });
+}
+
+async function onLoginSuccess(user) {
+    // Update UI
+    const elName = document.getElementById('userName');
+    const elEmail = document.getElementById('userEmail');
+    const elAvatar = document.getElementById('userAvatar');
+
+    if (elName) elName.textContent = user.displayName || 'User';
+    if (elEmail) elEmail.textContent = user.email || '';
+    if (elAvatar) elAvatar.src = user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'User');
+
+    // Tampilkan app, sembunyikan login
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('appContainer').style.display = 'flex';
+
+    // Load data user
+    await loadUserData(user.uid);
+
+    // Attach event listeners (sekali saja)
+    if (!listenersAttached) {
+        setupEventListeners();
+        listenersAttached = true;
+    }
+
     updateDate();
+}
+
+function showLoginPage() {
+    document.getElementById('loginPage').style.display = 'flex';
+    document.getElementById('appContainer').style.display = 'none';
+    currentUser = null;
+    daftarBarang = [];
+    riwayat = [];
+    listenersAttached = false;
+}
+
+function logout() {
+    if (!confirm('Yakin ingin logout?')) return;
+    auth.signOut().then(() => {
+        showLoginPage();
+    });
+}
+
+// ==================== FIRESTORE ====================
+async function loadUserData(uid) {
+    const loading = document.getElementById('loadingScreen');
+    if (loading) loading.style.display = 'flex';
+
+    try {
+        // Load barang
+        const barangSnap = await db.collection('users').doc(uid).collection('barang').get();
+        daftarBarang = barangSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Load riwayat
+        const riwayatSnap = await db.collection('users').doc(uid).collection('riwayat').get();
+        riwayat = riwayatSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Urutkan riwayat berdasarkan tanggal desc
+        riwayat.sort((a, b) => new Date(b.tanggal || 0) - new Date(a.tanggal || 0));
+
+        renderAll();
+    } catch (error) {
+        console.error('Error load data:', error);
+        alert('Gagal memuat data: ' + error.message);
+    } finally {
+        if (loading) loading.style.display = 'none';
+    }
+}
+
+async function saveBarang(barang) {
+    if (!currentUser) return;
+    try {
+        const ref = db.collection('users').doc(currentUser.uid).collection('barang').doc();
+        const newBarang = { ...barang };
+        delete newBarang.id;
+        await ref.set(newBarang);
+        daftarBarang.push({ id: ref.id, ...newBarang });
+        renderAll();
+    } catch (error) {
+        console.error('Error save barang:', error);
+        alert('Gagal menyimpan barang: ' + error.message);
+    }
+}
+
+async function updateStokBarang(id, stokBaru) {
+    if (!currentUser) return;
+    try {
+        await db.collection('users').doc(currentUser.uid).collection('barang').doc(id).update({ stok: stokBaru });
+        const barang = daftarBarang.find(b => b.id === id);
+        if (barang) barang.stok = stokBaru;
+    } catch (error) {
+        console.error('Error update stok:', error);
+    }
+}
+
+async function deleteBarangFromDB(id) {
+    if (!currentUser) return;
+    try {
+        await db.collection('users').doc(currentUser.uid).collection('barang').doc(id).delete();
+        daftarBarang = daftarBarang.filter(b => b.id !== id);
+        renderAll();
+    } catch (error) {
+        console.error('Error delete barang:', error);
+    }
+}
+
+async function saveRiwayat(transaksi) {
+    if (!currentUser) return;
+    try {
+        const ref = db.collection('users').doc(currentUser.uid).collection('riwayat').doc();
+        const newRiwayat = { ...transaksi };
+        delete newRiwayat.id;
+        await ref.set(newRiwayat);
+        riwayat.unshift({ id: ref.id, ...newRiwayat });
+        renderAll();
+    } catch (error) {
+        console.error('Error save riwayat:', error);
+        alert('Gagal menyimpan riwayat: ' + error.message);
+    }
+}
+
+async function deleteAllRiwayatFromDB() {
+    if (!currentUser) return;
+    try {
+        const batch = db.batch();
+        riwayat.forEach(r => {
+            batch.delete(db.collection('users').doc(currentUser.uid).collection('riwayat').doc(r.id));
+        });
+        await batch.commit();
+        riwayat = [];
+        renderAll();
+    } catch (error) {
+        console.error('Error delete riwayat:', error);
+        alert('Gagal menghapus riwayat: ' + error.message);
+    }
 }
 
 // ==================== RENDER ====================
@@ -55,17 +230,12 @@ function renderAll() {
     renderRiwayatMasuk();
     renderRiwayatKeluar();
     renderRiwayatAll();
-    renderKeuangan();
-    renderKeuanganSummary();
-    renderDashboardKeuangan();
 }
 
 function renderBarang() {
     const tbody = document.getElementById('tbodyBarang');
     if (!tbody) return;
-    tbody.innerHTML = daftarBarang.map((b, i) => {
-        const totalNilai = (b.stok || 0) * (b.harga || 0);
-        return `
+    tbody.innerHTML = daftarBarang.map((b, i) => `
         <tr>
             <td>${i + 1}</td>
             <td><strong>${b.nama}</strong></td>
@@ -74,20 +244,16 @@ function renderBarang() {
             <td>${b.ukuran || '-'}</td>
             <td><strong>${b.stok}</strong></td>
             <td>${b.satuan}</td>
-            <td>${formatRupiah(b.harga || 0)}</td>
-            <td><strong style="color:#4f46e5;">${formatRupiah(totalNilai)}</strong></td>
-            <td>
-                <button class="btn-delete" onclick="updateHargaBarang(${b.id})" title="Edit Harga" style="background:#dbeafe;color:#1e40af;margin-right:4px;">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn-delete" onclick="hapusBarang(${b.id})"><i class="fas fa-trash"></i></button>
-            </td>
+            <td>${formatRupiah(b.hargaBeli || 0)}</td>
+            <td>${formatRupiah(b.hargaJual || 0)}</td>
+            <td><button class="btn-delete" onclick="hapusBarang('${b.id}')"><i class="fas fa-trash"></i></button></td>
         </tr>
-    `}).join('');
+    `).join('') || '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:20px;">Belum ada barang. Klik "Tambah Barang" untuk mulai.</td></tr>';
 }
 
 function renderDashboard() {
-    document.getElementById('totalBarang').textContent = daftarBarang.length;
+    const elTotal = document.getElementById('totalBarang');
+    if (elTotal) elTotal.textContent = daftarBarang.length;
 
     const bulanIni = new Date().getMonth();
     const tahunIni = new Date().getFullYear();
@@ -107,10 +273,17 @@ function renderDashboard() {
     const menipis = daftarBarang.filter(b => b.stok < 10);
     document.getElementById('totalMenipis').textContent = menipis.length;
 
-    // Total nilai aset gudang
-    const totalNilaiAset = daftarBarang.reduce((s, b) => s + (b.stok * (b.harga || 0)), 0);
-    const elAset = document.getElementById('totalNilaiAset');
-    if (elAset) elAset.textContent = formatRupiah(totalNilaiAset);
+    // Uang Masuk = dari barang keluar (penjualan)
+    const uangMasukBulanIni = keluarBulanIni.reduce((s, r) => s + (r.total || 0), 0);
+    // Uang Keluar = dari barang masuk (pembelian)
+    const uangKeluarBulanIni = masukBulanIni.reduce((s, r) => s + (r.total || 0), 0);
+    const totalUangMasuk = riwayat.filter(r => r.jenis === 'keluar').reduce((s, r) => s + (r.total || 0), 0);
+    const totalUangKeluar = riwayat.filter(r => r.jenis === 'masuk').reduce((s, r) => s + (r.total || 0), 0);
+    const saldo = totalUangMasuk - totalUangKeluar;
+
+    document.getElementById('dashUangMasuk').textContent = formatRupiah(uangMasukBulanIni);
+    document.getElementById('dashUangKeluar').textContent = formatRupiah(uangKeluarBulanIni);
+    document.getElementById('dashSaldo').textContent = formatRupiah(saldo);
 
     const container = document.getElementById('lowStockList');
     if (menipis.length === 0) {
@@ -125,188 +298,159 @@ function renderDashboard() {
     }
 }
 
-function renderDashboardKeuangan() {
-    const bulanIni = new Date().getMonth();
-    const tahunIni = new Date().getFullYear();
-
-    const masukBulanIni = keuangan.filter(k => {
-        const d = new Date(k.tanggal);
-        return k.jenis === 'pemasukan' && d.getMonth() === bulanIni && d.getFullYear() === tahunIni;
-    });
-    const keluarBulanIni = keuangan.filter(k => {
-        const d = new Date(k.tanggal);
-        return k.jenis === 'pengeluaran' && d.getMonth() === bulanIni && d.getFullYear() === tahunIni;
-    });
-
-    const totalMasuk = masukBulanIni.reduce((s, k) => s + k.jumlah, 0);
-    const totalKeluar = keluarBulanIni.reduce((s, k) => s + k.jumlah, 0);
-    const saldo = keuangan.reduce((s, k) => s + (k.jenis === 'pemasukan' ? k.jumlah : -k.jumlah), 0);
-
-    const el1 = document.getElementById('dashPemasukan');
-    const el2 = document.getElementById('dashPengeluaran');
-    const el3 = document.getElementById('dashSaldo');
-    if (el1) el1.textContent = formatRupiah(totalMasuk);
-    if (el2) el2.textContent = formatRupiah(totalKeluar);
-    if (el3) el3.textContent = formatRupiah(saldo);
-}
-
-function renderKeuanganSummary() {
-    const totalMasuk = keuangan.filter(k => k.jenis === 'pemasukan').reduce((s, k) => s + k.jumlah, 0);
-    const totalKeluar = keuangan.filter(k => k.jenis === 'pengeluaran').reduce((s, k) => s + k.jumlah, 0);
-    const saldo = totalMasuk - totalKeluar;
-
-    const el1 = document.getElementById('keuTotalMasuk');
-    const el2 = document.getElementById('keuTotalKeluar');
-    const el3 = document.getElementById('keuSaldo');
-    if (el1) el1.textContent = formatRupiah(totalMasuk);
-    if (el2) el2.textContent = formatRupiah(totalKeluar);
-    if (el3) el3.textContent = formatRupiah(saldo);
-}
-
-function renderKeuangan() {
-    const tbody = document.getElementById('tbodyKeuangan');
-    if (!tbody) return;
-
-    let data = [...keuangan].reverse();
-    if (filterKeu === 'pemasukan') data = data.filter(k => k.jenis === 'pemasukan');
-    if (filterKeu === 'pengeluaran') data = data.filter(k => k.jenis === 'pengeluaran');
-
-    tbody.innerHTML = data.map((k, i) => `
-        <tr>
-            <td>${i + 1}</td>
-            <td>${formatTanggal(k.tanggal)}</td>
-            <td><span class="${k.jenis === 'pemasukan' ? 'badge-masuk' : 'badge-keluar'}">${k.jenis === 'pemasukan' ? '💰 Pemasukan' : '💸 Pengeluaran'}</span></td>
-            <td>${k.kategori}</td>
-            <td class="${k.jenis === 'pemasukan' ? 'keu-masuk' : 'keu-keluar'}">${k.jenis === 'pemasukan' ? '+' : '-'} ${formatRupiah(k.jumlah)}</td>
-            <td>${k.keterangan || '-'}</td>
-            <td><button class="btn-delete" onclick="hapusKeuangan(${k.id})"><i class="fas fa-trash"></i></button></td>
-        </tr>
-    `).join('') || '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Belum ada transaksi keuangan</td></tr>';
-}
-
 function populateSelects() {
     ['masukBarang', 'keluarBarang'].forEach(id => {
         const sel = document.getElementById(id);
         if (!sel) return;
         sel.innerHTML = daftarBarang.map(b => `
             <option value="${b.id}">${b.nama} ${b.warna ? '('+b.warna+')' : ''} - ${b.stok} ${b.satuan}</option>
-        `).join('');
+        `).join('') || '<option value="">Belum ada barang</option>';
     });
 }
 
 function renderRiwayatMasuk() {
     const tbody = document.getElementById('tbodyMasuk');
     if (!tbody) return;
-    const data = riwayat.filter(r => r.jenis === 'masuk').slice(-10).reverse();
+    const data = riwayat.filter(r => r.jenis === 'masuk').slice(0, 10);
     tbody.innerHTML = data.map((r, i) => {
         const barang = daftarBarang.find(b => b.id === r.barangId);
         return `<tr>
             <td>${i + 1}</td>
-            <td>${barang ? barang.nama : 'Terhapus'}</td>
+            <td>${r.namaBarang || (barang ? barang.nama : 'Terhapus')}</td>
             <td><strong>${r.jumlah}</strong></td>
+            <td>${formatRupiah(r.harga || 0)}</td>
+            <td><strong style="color:#ef4444;">${formatRupiah(r.total || 0)}</strong></td>
             <td>${r.supplier || '-'}</td>
             <td>${formatTanggal(r.tanggal)}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Belum ada riwayat masuk</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Belum ada riwayat masuk</td></tr>';
 }
 
 function renderRiwayatKeluar() {
     const tbody = document.getElementById('tbodyKeluar');
     if (!tbody) return;
-    const data = riwayat.filter(r => r.jenis === 'keluar').slice(-10).reverse();
+    const data = riwayat.filter(r => r.jenis === 'keluar').slice(0, 10);
     tbody.innerHTML = data.map((r, i) => {
         const barang = daftarBarang.find(b => b.id === r.barangId);
         return `<tr>
             <td>${i + 1}</td>
-            <td>${barang ? barang.nama : 'Terhapus'}</td>
+            <td>${r.namaBarang || (barang ? barang.nama : 'Terhapus')}</td>
             <td><strong>${r.jumlah}</strong></td>
+            <td>${formatRupiah(r.harga || 0)}</td>
+            <td><strong style="color:#10b981;">${formatRupiah(r.total || 0)}</strong></td>
             <td>${r.tujuan || '-'}</td>
             <td>${formatTanggal(r.tanggal)}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;">Belum ada riwayat keluar</td></tr>';
+    }).join('') || '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Belum ada riwayat keluar</td></tr>';
+}
+
+// ==================== RIWAYAT & KEUANGAN ====================
+function getFilteredRiwayat() {
+    let data = [...riwayat];
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (currentFilter === 'today') {
+        data = data.filter(r => new Date(r.tanggal) >= today);
+    } else if (currentFilter === 'week') {
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        data = data.filter(r => new Date(r.tanggal) >= weekAgo);
+    } else if (currentFilter === 'month') {
+        data = data.filter(r => {
+            const d = new Date(r.tanggal);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+    } else if (currentFilter === 'year') {
+        data = data.filter(r => new Date(r.tanggal).getFullYear() === now.getFullYear());
+    } else if (currentFilter === 'custom') {
+        if (customDari) data = data.filter(r => new Date(r.tanggal) >= new Date(customDari));
+        if (customSampai) {
+            const sampai = new Date(customSampai);
+            sampai.setHours(23, 59, 59);
+            data = data.filter(r => new Date(r.tanggal) <= sampai);
+        }
+    }
+    return data;
 }
 
 function renderRiwayatAll() {
+    const data = getFilteredRiwayat().sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+
+    const uangMasuk = data.filter(r => r.jenis === 'keluar').reduce((s, r) => s + (r.total || 0), 0);
+    const uangKeluar = data.filter(r => r.jenis === 'masuk').reduce((s, r) => s + (r.total || 0), 0);
+    const saldo = uangMasuk - uangKeluar;
+
+    document.getElementById('riwayatUangMasuk').textContent = formatRupiah(uangMasuk);
+    document.getElementById('riwayatUangKeluar').textContent = formatRupiah(uangKeluar);
+    document.getElementById('riwayatSaldo').textContent = formatRupiah(saldo);
+
     const tbody = document.getElementById('tbodyRiwayat');
     if (!tbody) return;
-    const data = [...riwayat].reverse();
+
     tbody.innerHTML = data.map((r, i) => {
         const barang = daftarBarang.find(b => b.id === r.barangId);
-        const jenisLabel = r.jenis === 'masuk' ? '📥 Masuk' : '📤 Keluar';
-        const warna = r.jenis === 'masuk' ? '#10b981' : '#f59e0b';
+        const namaBarang = r.namaBarang || (barang ? barang.nama : 'Terhapus');
+        const badge = r.jenis === 'masuk'
+            ? '<span class="badge-masuk">📥 Masuk</span>'
+            : '<span class="badge-keluar">📤 Keluar</span>';
+        const totalClass = r.jenis === 'masuk' ? 'text-keluar' : 'text-masuk';
+        const totalPrefix = r.jenis === 'masuk' ? '-' : '+';
         return `<tr>
             <td>${i + 1}</td>
             <td>${formatTanggal(r.tanggal)}</td>
-            <td>${barang ? barang.nama : 'Terhapus'}</td>
-            <td><span style="color:${warna};font-weight:600;">${jenisLabel}</span></td>
+            <td>${badge}</td>
+            <td>${namaBarang}</td>
             <td><strong>${r.jumlah}</strong></td>
+            <td>${formatRupiah(r.harga || 0)}</td>
+            <td class="${totalClass}">${totalPrefix} ${formatRupiah(r.total || 0)}</td>
             <td>${r.keterangan || r.supplier || r.tujuan || '-'}</td>
         </tr>`;
-    }).join('') || '<tr><td colspan="6" style="text-align:center;color:#94a3b8;">Belum ada transaksi</td></tr>';
+    }).join('') || '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">Belum ada transaksi pada periode ini</td></tr>';
 }
 
 // ==================== FUNGSI BARANG ====================
-function tambahBarang(nama, kategori, warna, ukuran, stok, satuan, harga) {
-    daftarBarang.push({
-        id: idCounter++,
-        nama: nama,
-        kategori: kategori,
+async function tambahBarang(nama, kategori, warna, ukuran, stok, satuan, hargaBeli, hargaJual) {
+    await saveBarang({
+        nama,
+        kategori,
         warna: warna || '-',
         ukuran: ukuran || '-',
         stok: parseInt(stok) || 0,
-        satuan: satuan,
-        harga: parseInt(harga) || 0
+        satuan,
+        hargaBeli: parseInt(hargaBeli) || 0,
+        hargaJual: parseInt(hargaJual) || 0
     });
-    localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
-    localStorage.setItem('jahitStok_idCounter', String(idCounter));
-    renderAll();
 }
 
-function hapusBarang(id) {
+async function hapusBarang(id) {
     if (!confirm('Yakin hapus barang ini?')) return;
-    daftarBarang = daftarBarang.filter(b => b.id !== id);
-    localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
-    renderAll();
+    await deleteBarangFromDB(id);
 }
 
-function updateHargaBarang(id) {
-    const barang = daftarBarang.find(b => b.id === id);
-    if (!barang) return;
-    const hargaBaru = prompt(
-        `Harga baru untuk "${barang.nama}" ${barang.warna ? '(' + barang.warna + ')' : ''}\n\nHarga saat ini: ${formatRupiah(barang.harga || 0)}`,
-        barang.harga || 0
-    );
-    if (hargaBaru === null) return;
-    const harga = parseInt(hargaBaru);
-    if (isNaN(harga) || harga < 0) { alert('Harga tidak valid!'); return; }
-    barang.harga = harga;
-    localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
-    renderAll();
-    alert('✅ Harga berhasil diupdate!');
-}
-
-function catatMasuk(barangId, jumlah, tanggal, supplier, keterangan) {
-    const barang = daftarBarang.find(b => b.id === parseInt(barangId));
+async function catatMasuk(barangId, jumlah, harga, tanggal, supplier, keterangan) {
+    const barang = daftarBarang.find(b => b.id === barangId);
     if (!barang) { alert('Barang tidak ditemukan!'); return false; }
 
-    barang.stok += parseInt(jumlah);
-    localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
+    const stokBaru = parseInt(barang.stok) + parseInt(jumlah);
+    await updateStokBarang(barangId, stokBaru);
 
-    riwayat.push({
-        barangId: parseInt(barangId),
+    await saveRiwayat({
+        barangId,
+        namaBarang: barang.nama + (barang.warna && barang.warna !== '-' ? ' (' + barang.warna + ')' : ''),
         jenis: 'masuk',
         jumlah: parseInt(jumlah),
+        harga: parseInt(harga) || 0,
+        total: (parseInt(jumlah) || 0) * (parseInt(harga) || 0),
         tanggal: tanggal || new Date().toISOString().split('T')[0],
         supplier: supplier || '',
         keterangan: keterangan || ''
     });
-    localStorage.setItem('jahitStok_riwayat', JSON.stringify(riwayat));
-    renderAll();
     return true;
 }
 
-function catatKeluar(barangId, jumlah, tanggal, tujuan, keterangan) {
-    const barang = daftarBarang.find(b => b.id === parseInt(barangId));
+async function catatKeluar(barangId, jumlah, harga, tanggal, tujuan, keterangan) {
+    const barang = daftarBarang.find(b => b.id === barangId);
     if (!barang) { alert('Barang tidak ditemukan!'); return false; }
 
     if (barang.stok < parseInt(jumlah)) {
@@ -314,42 +458,21 @@ function catatKeluar(barangId, jumlah, tanggal, tujuan, keterangan) {
         return false;
     }
 
-    barang.stok -= parseInt(jumlah);
-    localStorage.setItem('jahitStok_barang', JSON.stringify(daftarBarang));
+    const stokBaru = parseInt(barang.stok) - parseInt(jumlah);
+    await updateStokBarang(barangId, stokBaru);
 
-    riwayat.push({
-        barangId: parseInt(barangId),
+    await saveRiwayat({
+        barangId,
+        namaBarang: barang.nama + (barang.warna && barang.warna !== '-' ? ' (' + barang.warna + ')' : ''),
         jenis: 'keluar',
         jumlah: parseInt(jumlah),
+        harga: parseInt(harga) || 0,
+        total: (parseInt(jumlah) || 0) * (parseInt(harga) || 0),
         tanggal: tanggal || new Date().toISOString().split('T')[0],
         tujuan: tujuan || '',
         keterangan: keterangan || ''
     });
-    localStorage.setItem('jahitStok_riwayat', JSON.stringify(riwayat));
-    renderAll();
     return true;
-}
-
-// ==================== FUNGSI KEUANGAN ====================
-function tambahKeuangan(jenis, kategori, jumlah, tanggal, keterangan) {
-    keuangan.push({
-        id: keuIdCounter++,
-        jenis: jenis,
-        kategori: kategori,
-        jumlah: parseInt(jumlah) || 0,
-        tanggal: tanggal || new Date().toISOString().split('T')[0],
-        keterangan: keterangan || ''
-    });
-    localStorage.setItem('jahitStok_keuangan', JSON.stringify(keuangan));
-    localStorage.setItem('jahitStok_keuIdCounter', String(keuIdCounter));
-    renderAll();
-}
-
-function hapusKeuangan(id) {
-    if (!confirm('Yakin hapus transaksi ini?')) return;
-    keuangan = keuangan.filter(k => k.id !== id);
-    localStorage.setItem('jahitStok_keuangan', JSON.stringify(keuangan));
-    renderAll();
 }
 
 // ==================== UTILITY ====================
@@ -368,6 +491,18 @@ function updateDate() {
     const options = { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' };
     const el = document.getElementById('dateDisplay');
     if (el) el.textContent = now.toLocaleDateString('id-ID', options);
+}
+
+function updatePreviewMasuk() {
+    const jumlah = parseInt(document.getElementById('masukJumlah').value) || 0;
+    const harga = parseInt(document.getElementById('masukHarga').value) || 0;
+    document.getElementById('previewMasuk').textContent = formatRupiah(jumlah * harga);
+}
+
+function updatePreviewKeluar() {
+    const jumlah = parseInt(document.getElementById('keluarJumlah').value) || 0;
+    const harga = parseInt(document.getElementById('keluarHarga').value) || 0;
+    document.getElementById('previewKeluar').textContent = formatRupiah(jumlah * harga);
 }
 
 // ==================== EVENT LISTENERS ====================
@@ -389,27 +524,23 @@ function setupEventListeners() {
 
     // Hamburger
     const ham = document.getElementById('hamburger');
-    if (ham) {
-        ham.addEventListener('click', function() {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-    }
+    if (ham) ham.addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
 
-    // Modal Tambah Barang
+    // Logout
+    const btnLogout = document.getElementById('btnLogout');
+    if (btnLogout) btnLogout.addEventListener('click', logout);
+
+    // Modal
     const btnTambah = document.getElementById('btnTambahBarang');
     if (btnTambah) {
-        btnTambah.addEventListener('click', function() {
+        btnTambah.addEventListener('click', () => {
             document.getElementById('modalBarang').classList.add('show');
             document.getElementById('formTambahBarang').reset();
         });
     }
 
     const modalClose = document.getElementById('modalClose');
-    if (modalClose) {
-        modalClose.addEventListener('click', function() {
-            document.getElementById('modalBarang').classList.remove('show');
-        });
-    }
+    if (modalClose) modalClose.addEventListener('click', () => document.getElementById('modalBarang').classList.remove('show'));
 
     const modalOverlay = document.getElementById('modalBarang');
     if (modalOverlay) {
@@ -421,7 +552,7 @@ function setupEventListeners() {
     // Form Tambah Barang
     const formTambah = document.getElementById('formTambahBarang');
     if (formTambah) {
-        formTambah.addEventListener('submit', function(e) {
+        formTambah.addEventListener('submit', async function(e) {
             e.preventDefault();
             const nama = document.getElementById('fbNama').value.trim();
             const kategori = document.getElementById('fbKategori').value;
@@ -429,11 +560,12 @@ function setupEventListeners() {
             const ukuran = document.getElementById('fbUkuran').value.trim();
             const stok = document.getElementById('fbStok').value || 0;
             const satuan = document.getElementById('fbSatuan').value;
-            const harga = document.getElementById('fbHarga') ? document.getElementById('fbHarga').value : 0;
+            const hargaBeli = document.getElementById('fbHargaBeli').value || 0;
+            const hargaJual = document.getElementById('fbHargaJual').value || 0;
 
             if (!nama) { alert('Nama barang wajib diisi!'); return; }
 
-            tambahBarang(nama, kategori, warna, ukuran, stok, satuan, harga);
+            await tambahBarang(nama, kategori, warna, ukuran, stok, satuan, hargaBeli, hargaJual);
             document.getElementById('modalBarang').classList.remove('show');
             this.reset();
             alert('✅ Barang berhasil ditambahkan!');
@@ -443,18 +575,22 @@ function setupEventListeners() {
     // Form Masuk
     const formMasuk = document.getElementById('formMasuk');
     if (formMasuk) {
-        formMasuk.addEventListener('submit', function(e) {
+        formMasuk.addEventListener('submit', async function(e) {
             e.preventDefault();
             const barangId = document.getElementById('masukBarang').value;
             const jumlah = document.getElementById('masukJumlah').value;
+            const harga = document.getElementById('masukHarga').value;
             const tanggal = document.getElementById('masukTanggal').value;
             const supplier = document.getElementById('masukSupplier').value.trim();
             const keterangan = document.getElementById('masukKeterangan').value.trim();
 
             if (!barangId || !jumlah) { alert('Barang dan jumlah wajib diisi!'); return; }
 
-            if (catatMasuk(barangId, jumlah, tanggal, supplier, keterangan)) {
+            const ok = await catatMasuk(barangId, jumlah, harga, tanggal, supplier, keterangan);
+            if (ok) {
                 this.reset();
+                document.getElementById('masukTanggal').value = new Date().toISOString().split('T')[0];
+                document.getElementById('previewMasuk').textContent = 'Rp 0';
                 alert('✅ Barang masuk berhasil dicatat!');
             }
         });
@@ -463,107 +599,111 @@ function setupEventListeners() {
     // Form Keluar
     const formKeluar = document.getElementById('formKeluar');
     if (formKeluar) {
-        formKeluar.addEventListener('submit', function(e) {
+        formKeluar.addEventListener('submit', async function(e) {
             e.preventDefault();
             const barangId = document.getElementById('keluarBarang').value;
             const jumlah = document.getElementById('keluarJumlah').value;
+            const harga = document.getElementById('keluarHarga').value;
             const tanggal = document.getElementById('keluarTanggal').value;
             const tujuan = document.getElementById('keluarTujuan').value.trim();
             const keterangan = document.getElementById('keluarKeterangan').value.trim();
 
             if (!barangId || !jumlah) { alert('Barang dan jumlah wajib diisi!'); return; }
 
-            if (catatKeluar(barangId, jumlah, tanggal, tujuan, keterangan)) {
+            const ok = await catatKeluar(barangId, jumlah, harga, tanggal, tujuan, keterangan);
+            if (ok) {
                 this.reset();
+                document.getElementById('keluarTanggal').value = new Date().toISOString().split('T')[0];
+                document.getElementById('previewKeluar').textContent = 'Rp 0';
                 alert('✅ Barang keluar berhasil dicatat!');
             }
         });
     }
 
-    // Form Keuangan
-    const formKeuangan = document.getElementById('formKeuangan');
-    if (formKeuangan) {
-        formKeuangan.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const jenis = document.getElementById('keuJenis').value;
-            const kategori = document.getElementById('keuKategori').value;
-            const jumlah = document.getElementById('keuJumlah').value;
-            const tanggal = document.getElementById('keuTanggal').value;
-            const keterangan = document.getElementById('keuKeterangan').value.trim();
+    // Preview Total
+    ['masukJumlah', 'masukHarga'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updatePreviewMasuk);
+    });
 
-            if (!jumlah || parseInt(jumlah) <= 0) { alert('Jumlah harus lebih dari 0!'); return; }
-            if (!tanggal) { alert('Tanggal wajib diisi!'); return; }
+    ['keluarJumlah', 'keluarHarga'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updatePreviewKeluar);
+    });
 
-            tambahKeuangan(jenis, kategori, jumlah, tanggal, keterangan);
-            this.reset();
-            alert(`✅ Transaksi ${jenis} berhasil dicatat!`);
-        });
-    }
-
-    // Filter Keuangan
-    const btnAll = document.getElementById('btnFilterKeuAll');
-    if (btnAll) {
-        btnAll.addEventListener('click', function() {
-            filterKeu = 'all';
-            renderKeuangan();
-            updateFilterButtons();
-        });
-    }
-    const btnIn = document.getElementById('btnFilterKeuMasuk');
-    if (btnIn) {
-        btnIn.addEventListener('click', function() {
-            filterKeu = 'pemasukan';
-            renderKeuangan();
-            updateFilterButtons();
-        });
-    }
-    const btnOut = document.getElementById('btnFilterKeuKeluar');
-    if (btnOut) {
-        btnOut.addEventListener('click', function() {
-            filterKeu = 'pengeluaran';
-            renderKeuangan();
-            updateFilterButtons();
-        });
-    }
-
-    // Hapus Semua Keuangan
-    const btnHapusKeu = document.getElementById('btnHapusKeu');
-    if (btnHapusKeu) {
-        btnHapusKeu.addEventListener('click', function() {
-            if (keuangan.length === 0) { alert('📭 Belum ada transaksi keuangan!'); return; }
-            if (confirm('⚠️ Yakin ingin menghapus SEMUA transaksi keuangan?\n\nData tidak bisa dikembalikan!')) {
-                keuangan = [];
-                localStorage.setItem('jahitStok_keuangan', JSON.stringify(keuangan));
-                renderAll();
-                alert('✅ Semua transaksi keuangan berhasil dihapus!');
+    // Auto-isi harga saat pilih barang
+    const masukBarang = document.getElementById('masukBarang');
+    if (masukBarang) {
+        masukBarang.addEventListener('change', function() {
+            const barang = daftarBarang.find(b => b.id === this.value);
+            if (barang) {
+                document.getElementById('masukHarga').value = barang.hargaBeli || 0;
+                updatePreviewMasuk();
             }
         });
     }
 
-    // Reset Riwayat Barang
-    const btnResetRiwayat = document.getElementById('btnResetRiwayat');
-    if (btnResetRiwayat) {
-        btnResetRiwayat.addEventListener('click', function() {
-            if (riwayat.length === 0) { alert('📭 Belum ada riwayat yang bisa direset!'); return; }
-            if (confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi barang?\n\nData tidak bisa dikembalikan!')) {
-                riwayat = [];
-                localStorage.setItem('jahitStok_riwayat', JSON.stringify(riwayat));
-                renderAll();
+    const keluarBarang = document.getElementById('keluarBarang');
+    if (keluarBarang) {
+        keluarBarang.addEventListener('change', function() {
+            const barang = daftarBarang.find(b => b.id === this.value);
+            if (barang) {
+                document.getElementById('keluarHarga').value = barang.hargaJual || 0;
+                updatePreviewKeluar();
+            }
+        });
+    }
+
+    // Filter Buttons
+    document.querySelectorAll('.btn-filter').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentFilter = this.dataset.filter;
+            customDari = '';
+            customSampai = '';
+            document.getElementById('filterDari').value = '';
+            document.getElementById('filterSampai').value = '';
+            renderRiwayatAll();
+        });
+    });
+
+    const btnFilterCustom = document.getElementById('btnFilterCustom');
+    if (btnFilterCustom) {
+        btnFilterCustom.addEventListener('click', function() {
+            customDari = document.getElementById('filterDari').value;
+            customSampai = document.getElementById('filterSampai').value;
+            if (!customDari && !customSampai) { alert('Isi minimal satu tanggal!'); return; }
+            currentFilter = 'custom';
+            document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+            renderRiwayatAll();
+        });
+    }
+
+    // Reset Riwayat
+    const btnReset = document.getElementById('btnResetRiwayat');
+    if (btnReset) {
+        btnReset.addEventListener('click', async function() {
+            if (riwayat.length === 0) { alert('📭 Belum ada riwayat!'); return; }
+            if (confirm('⚠️ Yakin ingin menghapus SEMUA riwayat transaksi?\n\nData tidak bisa dikembalikan!')) {
+                await deleteAllRiwayatFromDB();
                 alert('✅ Semua riwayat berhasil dihapus!');
             }
         });
     }
 }
 
-function updateFilterButtons() {
-    ['btnFilterKeuAll', 'btnFilterKeuMasuk', 'btnFilterKeuKeluar'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('filter-btn-active');
-    });
-    if (filterKeu === 'all') document.getElementById('btnFilterKeuAll').classList.add('filter-btn-active');
-    if (filterKeu === 'pemasukan') document.getElementById('btnFilterKeuMasuk').classList.add('filter-btn-active');
-    if (filterKeu === 'pengeluaran') document.getElementById('btnFilterKeuKeluar').classList.add('filter-btn-active');
+// ==================== SET DEFAULT TANGGAL ====================
+function setDefaultTanggal() {
+    const today = new Date().toISOString().split('T')[0];
+    const elMasuk = document.getElementById('masukTanggal');
+    const elKeluar = document.getElementById('keluarTanggal');
+    if (elMasuk) elMasuk.value = today;
+    if (elKeluar) elKeluar.value = today;
 }
 
 // ==================== JALANKAN ====================
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', () => {
+    setDefaultTanggal();
+    init();
+});
